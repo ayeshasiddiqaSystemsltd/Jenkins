@@ -1,0 +1,27 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('checking version') {
+            steps {
+                sh 'curl --version'
+            }
+        }
+        stage('Calling Jenkins API') {
+            steps {
+                 sh 'curl -v -X POST http://20.54.72.51:8080/api/json --user alinakhan:116191359620d41b1da4dadf98fb974991'
+                 // -v --verbose 'more output, indicates the direction'
+                 // -X [METHOD] [URL] 'Specify the HTTP method to be used when sending the request'
+                 // --user -u 'Specify the authentication data by passing a pair of login-password'
+            }
+        }
+         stage('Print Title Only') {
+            steps {
+                sh 'curl -s -I http://20.54.72.51:8080/job/'
+                // -s --silent 'it makes curl show an error message if it fails'
+                // -I --head 'Print the title without the body of the document'
+            }
+        }
+        
+    }
+}
