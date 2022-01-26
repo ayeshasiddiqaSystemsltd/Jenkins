@@ -1,0 +1,70 @@
+pipeline {
+    agent {
+        label 'jenkinsWindow'
+    }
+    options {
+        // This is required if you want to clean before build
+        skipDefaultCheckout(true)
+    }
+    stages {
+        stage ('Clean workspace') {
+            steps {
+                cleanWs()    
+			}
+        }
+        stage ('Git Checkout') {
+            steps {
+                checkout([$class: 'GitSCM', branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/alinakhanSystemsltd/eShopOnWeb.git']]])
+			}
+        }
+        stage('Restore packages') {
+            steps {
+                bat "dotnet restore ${workspace}\\eShopOnWeb.sln"
+			}
+        }
+        stage('Build') {
+            steps {
+                bat "dotnet build eShopOnWeb.sln  --configuration Release"
+			}
+        }
+        stage('Running unit tests') {
+            steps {
+                bat "dotnet tool install dotnet-reportgenerator-globaltool --tool-path tools"
+                bat "dotnet add ${workspace}\\tests\\UnitTests\\UnitTests.csproj package JUnitTestLogger --version 1.1.0"
+                bat "dotnet test ${workspace}\\tests\\UnitTests\\UnitTests.csproj --logger \"trx;LogFileName=results.trx\" --logger \"junit;LogFileName=\"${WORKSPACE}\"/TestResults/1.0.0.\"${env.BUILD_NUMBER}\"results.xml\" --configuration release --collect \"XPlat Code Coverage\" /p:CollectCoverage=true /p:CoverletOutput='./TestResults/' /p:CoverletOutputFormat=cobertura /p:Include=[xunit.*]*"
+                
+                bat '''set datestr= %date:~4,2%%date:~7,2%%date:~10,4%
+                set currtime=%time: =0%
+                set timestr=%currtime:~0,2%%currtime:~3,2%%currtime:~6,2%
+                set currdatetime=%datestr%_%timestr%
+                FOR /F "delims=" %%i IN (\'dir "C:/Jenkins/workspace/AlinaKhan/dotnetWithCobertura/tests/UnitTests/TestResults" /b /ad-h /t:c /o-d\') DO (
+                SET a=%%i
+                GOTO :found
+                )
+                goto :eof
+                :found
+                rename "C:/Jenkins/workspace/AlinaKhan/dotnetWithCobertura/tests/UnitTests/TestResults\\\\%a%" "report"'''
+            }
+        }
+            stage('Generate report'){
+                steps{
+                    bat "C:\\ReportGenerator\\net5.0\\ReportGenerator.exe -reports:${WORKSPACE}\\tests\\UnitTests\\TestResults\\report\\In\\jenkins-win\\coverage.cobertura.xml -targetdir:${WORKSPACE}\\tests\\UnitTests\\TestResults\\report\\In\\jenkins-win -reporttypes:cobertura"
+                    
+                }
+            }
+            stage('Publish Cobertura report'){
+                steps{
+                        cobertura autoUpdateHealth: false, autoUpdateStability: false, coberturaReportFile: 'tests\\UnitTests\\TestResults\\report\\In\\jenkins-win\\coverage.cobertura.xml', conditionalCoverageTargets: '70, 0, 0', failUnhealthy: false, failUnstable: false, lineCoverageTargets: '80, 0, 0', maxNumberOfBuilds: 0, methodCoverageTargets: '80, 0, 0', onlyStable: false, sourceEncoding: 'ASCII', zoomCoverageChart: false
+                }
+            }
+    }
+    post {
+        failure { 
+            echo 'built and test Failed! :('
+        }
+        success {
+                echo 'successfully built and tested!:)'
+            }
+    }
+}
+    
